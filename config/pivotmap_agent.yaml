@@ -1,0 +1,46 @@
+llm:
+  provider_class: MiroThinkerSGLangClient
+  model_name: mirothinker-v1.7
+  fallback_provider_class: ClaudeAnthropicClient
+
+agent_graph:
+  root: jd_parser
+  nodes:
+    jd_parser:
+      skill: skills/jd_parser/SKILL.md
+      output: jd_requirements[]
+      next: planner
+
+    planner:
+      skill: skills/planner/SKILL.md
+      input: jd_requirements[]
+      spawns: [research, research, research, research]  # parallel sub-tasks
+      retry_threshold: 3  # if SourcedClaims returned < 3, reformulate and retry
+
+    research:
+      skill: skills/research/SKILL.md
+      tools: [web_search, web_fetch, temporal_tagger]
+      output: source_bank[]
+
+    verifier:
+      skill: skills/verifier/SKILL.md
+      depends_on: [research]
+      rules:
+        - confirmed: source_count >= 2
+        - low_confidence: source_count == 1
+        - conflict_node: contradicting_sources == true
+
+    module_validator:
+      skill: skills/module_validator/SKILL.md
+      tools: [module_db_query]
+      depends_on: [verifier]
+
+    proof_mapper:
+      skill: skills/proof_mapper/SKILL.md
+      depends_on: [verifier, module_validator]
+      classification: [matched, weak, missing]
+
+    synthesiser:
+      skill: skills/synthesiser/SKILL.md
+      depends_on: [proof_mapper]
+      output_schema: schemas/roadmap-schema.json

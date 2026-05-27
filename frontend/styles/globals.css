@@ -1,0 +1,111 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap");
+@import "tailwindcss";
+
+@source "../pages";
+@source "../components";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+
+  --color-pivot-bg: #fafaf8;
+  --color-pivot-paper: #ffffff;
+  --color-pivot-ink: #1a1a18;
+  --color-pivot-body: #444441;
+  --color-pivot-muted: #888780;
+  --color-pivot-border: rgba(68, 68, 65, 0.12);
+  --color-pivot-purple: #2ea6d1;
+  --color-pivot-purple-soft: #eaf7fc;
+  --color-pivot-purple-mid: #208bad;
+  --color-pivot-teal: #1d9e75;
+  --color-pivot-teal-soft: #e1f5ee;
+  --color-pivot-amber: #ba7517;
+  --color-pivot-amber-soft: #faeeda;
+  --color-pivot-coral: #d85a30;
+  --color-pivot-coral-soft: #faece7;
+  --color-pivot-console: #0f0e0c;
+  --color-pivot-panel: #1a1915;
+  --color-pivot-panel-line: #2a2a25;
+  --color-pivot-surface: #f2f9fd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #fafaf8;
+}
+
+body {
+  margin: 0;
+  background: #fafaf8;
+  color: #444441;
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+@keyframes typing-cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes evidence-card-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0);
+  }
+}
+
+@keyframes logo-tile-hover {
+  0%,
+  100% {
+    margin-top: 0;
+  }
+  50% {
+    margin-top: -8px;
+  }
+}
+
+.typing-cursor {
+  animation: typing-cursor-blink 0.9s steps(1) infinite;
+}
+
+.evidence-card-float {
+  animation: evidence-card-drift 7s ease-in-out infinite;
+}
+
+.logo-tile-float {
+  animation: logo-tile-hover 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .typing-cursor,
+  .evidence-card-float,
+  .logo-tile-float {
+    animation: none !important;
+  }
+}

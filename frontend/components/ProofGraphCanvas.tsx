@@ -1,6 +1,5 @@
 import React from "react";
 import ReactFlow, { Edge, Node } from "reactflow";
-import "reactflow/dist/style.css";
 
 type ProofStatus = "matched" | "weak" | "missing";
 

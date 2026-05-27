@@ -16,5 +16,10 @@ build/
 coverage/
 htmlcov/
 *.log
+frontend/tsconfig.tsbuildinfo
+preview-jobs.txt
+.chrome*/
+SETUP-ISSUES.ps1
+SETUP-REPO.ps1
 .DS_Store
 Thumbs.db

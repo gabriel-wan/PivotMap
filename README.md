@@ -1,6 +1,6 @@
 # PivotMap
 
-PivotMap is an AI-powered career proof-mapping tool built on MiroFlow, MiroMind's open-source deep research agent framework. It maps job description requirements to student evidence such as modules, projects, internships, and sourced claims, then produces a proof graph that highlights matched, weak, and missing career evidence.
+PivotMap is an AI-powered career proof-mapping tool built on MiroFlow, MiroMind's open-source deep research agent framework. It turns sources, evidence, claims, skills, gaps, and trace events into a Career Proof Graph that students can reuse across applications.
 
 Live demo: TODO: add deployed demo link.
 
@@ -20,7 +20,7 @@ The compose stack starts:
 
 - `adapters/`: Institution-specific module catalogue adapters.
 - `skills/`: MiroFlow skill prompts for planning, research, verification, module validation, and synthesis.
-- `schemas/`: Shared Python dataclasses and JSON schema for proof graphs.
+- `schemas/`: Shared Python dataclasses and JSON schema for the Career Proof Graph.
 - `plugins/`: MiroFlow registered tools used by the agent graph.
 - `config/`: PivotMap agent graph configuration.
 - `scripts/`: Utilities such as module database seeding.

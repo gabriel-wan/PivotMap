@@ -8,19 +8,19 @@ agent_graph:
   nodes:
     jd_parser:
       skill: skills/jd_parser/SKILL.md
-      output: jd_requirements[]
+      output: target_requirements[]
       next: planner
 
     planner:
       skill: skills/planner/SKILL.md
-      input: jd_requirements[]
+      input: target_requirements[]
       spawns: [research, research, research, research]  # parallel sub-tasks
       retry_threshold: 3  # if SourcedClaims returned < 3, reformulate and retry
 
     research:
       skill: skills/research/SKILL.md
       tools: [web_search, web_fetch, temporal_tagger]
-      output: source_bank[]
+      output: sources_and_claims[]
 
     verifier:
       skill: skills/verifier/SKILL.md

@@ -1,91 +1,88 @@
 import React from "react";
-
-type ProofNode = {
-  status: "matched" | "weak" | "missing";
-  requirement: {
-    skill: string;
-  };
-  evidence?: Array<{
-    title: string;
-  }> | null;
-  gap_action?: string | null;
-  sources?: Array<{
-    source_url: string;
-    published_at: string;
-  }>;
-};
-
-type ProofGraph = {
-  nodes: ProofNode[];
-};
+import type { CareerProofGraph } from "./ProofGraphCanvas";
 
 type TimelineItem = {
   phase: "Prove" | "Learn" | "Build" | "Apply";
   title: string;
-  date: string;
+  detail: string;
   sourceUrl?: string;
 };
 
 type TimelineViewProps = {
-  graph: ProofGraph;
+  graph: CareerProofGraph;
 };
 
 export default function TimelineView({ graph }: TimelineViewProps) {
-  const items = buildTimeline(graph);
+  const sourceById = new Map(graph.sources.map((source) => [source.id, source]));
+  const items = buildTimeline(graph, sourceById);
 
   return (
-    <section aria-label="Proof roadmap timeline">
+    <section aria-label="Career proof timeline" className="space-y-3">
       {items.map((item, index) => (
-        <article key={`${item.phase}-${index}`} style={{ marginBottom: 18 }}>
-          <p style={{ margin: 0, fontWeight: 700 }}>{item.phase}</p>
-          <p style={{ margin: "4px 0" }}>{item.title}</p>
+        <article
+          className="rounded-2xl border border-pivot-border bg-pivot-paper p-4"
+          key={`${item.phase}-${index}`}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-pivot-purple">
+            {item.phase}
+          </p>
+          <p className="mt-2 text-sm font-semibold leading-5 text-pivot-ink">
+            {item.title}
+          </p>
           {item.sourceUrl ? (
-            <a href={item.sourceUrl} style={{ color: "#2563eb" }}>
-              {item.date}
+            <a className="mt-2 block text-xs font-semibold text-pivot-purple" href={item.sourceUrl}>
+              {item.detail}
             </a>
           ) : (
-            <span>{item.date}</span>
+            <span className="mt-2 block text-xs font-medium text-pivot-muted">
+              {item.detail}
+            </span>
           )}
         </article>
       ))}
+      {items.length === 0 ? (
+        <p className="rounded-2xl border border-pivot-border bg-pivot-paper p-4 text-sm leading-6 text-pivot-muted">
+          Roadmap actions will appear after you map a role or capture evidence.
+        </p>
+      ) : null}
     </section>
   );
 }
 
-function buildTimeline(graph: ProofGraph): TimelineItem[] {
-  const now = new Date().toISOString().slice(0, 10);
-  const items = graph.nodes.map((node): TimelineItem => {
-    const source = node.sources?.[0];
-    if (node.status === "matched") {
-      return {
-        phase: "Prove",
-        title: node.evidence?.[0]?.title ?? node.requirement.skill,
-        date: source?.published_at?.slice(0, 10) ?? now,
-        sourceUrl: source?.source_url,
-      };
-    }
-    if (node.status === "weak") {
-      return {
-        phase: "Build",
-        title: node.gap_action ?? node.requirement.skill,
-        date: source?.published_at?.slice(0, 10) ?? now,
-        sourceUrl: source?.source_url,
-      };
-    }
+function buildTimeline(
+  graph: CareerProofGraph,
+  sourceById: Map<string, CareerProofGraph["sources"][number]>,
+): TimelineItem[] {
+  const evidenceItems = graph.evidence_nodes.map((node): TimelineItem => {
+    const source = sourceById.get(node.source_ids[0]);
     return {
-      phase: "Learn",
-      title: node.gap_action ?? node.requirement.skill,
-      date: source?.published_at?.slice(0, 10) ?? now,
+      phase: "Prove",
+      title: node.title,
+      detail: source?.title ?? node.kind,
       sourceUrl: source?.source_url,
     };
   });
 
-  items.push({
-    phase: "Apply",
-    title: "Submit the strongest matched proof nodes with the tailored resume.",
-    date: now,
-  });
+  const claimItems = graph.claim_nodes.map((node): TimelineItem => ({
+    phase: "Prove",
+    title: node.claim_text,
+    detail: `${Math.round(node.confidence_score * 100)}% confidence`,
+  }));
 
-  const phaseOrder = { Prove: 0, Learn: 1, Build: 2, Apply: 3 };
-  return items.sort((left, right) => phaseOrder[left.phase] - phaseOrder[right.phase]);
+  const gapItems = graph.gap_nodes.map((node): TimelineItem => ({
+    phase: node.status === "matched" ? "Apply" : node.status === "weak" ? "Build" : "Learn",
+    title: node.recommended_action ?? node.requirement,
+    detail:
+      node.status === "matched"
+        ? "matched proof"
+        : node.status === "weak"
+          ? "needs stronger proof"
+          : "missing proof",
+    sourceUrl: sourceById.get(node.source_ids[0])?.source_url,
+  }));
+
+  const order = { Prove: 0, Learn: 1, Build: 2, Apply: 3 };
+  return [...evidenceItems, ...claimItems, ...gapItems].sort(
+    (left, right) => order[left.phase] - order[right.phase],
+  );
 }

@@ -1,0 +1,235 @@
+{
+  "user_id": "demo-nus-business-y3",
+  "sources": [
+    {
+      "id": "source-grab-careers-product",
+      "source_url": "https://www.grab.com/sg/careers/",
+      "source_type": "job_post",
+      "title": "Grab Singapore Careers",
+      "published_at": "2026-03-15T00:00:00Z",
+      "retrieved_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "company": "Grab",
+        "region": "Singapore"
+      }
+    },
+    {
+      "id": "source-nusmods-bt2102",
+      "source_url": "https://nusmods.com/courses/BT2102/data-management-and-visualisation",
+      "source_type": "course_catalogue",
+      "title": "BT2102 Data Management and Visualisation",
+      "published_at": "2025-08-01T00:00:00Z",
+      "retrieved_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "institution": "NUS"
+      }
+    },
+    {
+      "id": "source-nusmods-bt3103",
+      "source_url": "https://nusmods.com/courses/BT3103/application-systems-development-for-business-analytics",
+      "source_type": "course_catalogue",
+      "title": "BT3103 Application Systems Development for Business Analytics",
+      "published_at": "2025-08-01T00:00:00Z",
+      "retrieved_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "institution": "NUS"
+      }
+    },
+    {
+      "id": "source-fintech-internship",
+      "source_url": "https://pivotmap.local/demo/fintech-internship",
+      "source_type": "resume",
+      "title": "Singapore fintech startup internship",
+      "published_at": "2026-01-12T00:00:00Z",
+      "retrieved_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "attestation": "student_supplied"
+      }
+    }
+  ],
+  "evidence_nodes": [
+    {
+      "id": "evidence-bt2102",
+      "user_id": "demo-nus-business-y3",
+      "kind": "module",
+      "title": "BT2102 Data Management and Visualisation",
+      "description": "NUS module evidence for data analysis, dashboards, querying, and visual communication.",
+      "source_ids": ["source-nusmods-bt2102"],
+      "created_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "institution": "NUS",
+        "faculty": "School of Computing"
+      }
+    },
+    {
+      "id": "evidence-bt3103",
+      "user_id": "demo-nus-business-y3",
+      "kind": "module",
+      "title": "BT3103 Application Systems Development for Business Analytics",
+      "description": "NUS module evidence for analytics systems and product data workflows.",
+      "source_ids": ["source-nusmods-bt3103"],
+      "created_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "institution": "NUS",
+        "faculty": "School of Computing"
+      }
+    },
+    {
+      "id": "evidence-fintech-internship",
+      "user_id": "demo-nus-business-y3",
+      "kind": "experience",
+      "title": "Product Analytics Intern at Singapore fintech startup",
+      "description": "Analysed onboarding funnels, prepared weekly product insight decks, and recommended activation improvements.",
+      "source_ids": ["source-fintech-internship"],
+      "created_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "role": "Product Analytics Intern",
+        "location": "Singapore"
+      }
+    }
+  ],
+  "claim_nodes": [
+    {
+      "id": "claim-metrics-analysis",
+      "evidence_id": "evidence-fintech-internship",
+      "claim_text": "Analysed onboarding funnel metrics and translated findings into product recommendations.",
+      "confidence_status": "supported",
+      "confidence_score": 0.82,
+      "source_ids": ["source-fintech-internship"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "claim-data-visualisation",
+      "evidence_id": "evidence-bt2102",
+      "claim_text": "Completed coursework proving data management and visualisation skills.",
+      "confidence_status": "verified",
+      "confidence_score": 0.88,
+      "source_ids": ["source-nusmods-bt2102"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "claim-analytics-systems",
+      "evidence_id": "evidence-bt3103",
+      "claim_text": "Built analytics-system coursework relevant to SQL-backed product data workflows.",
+      "confidence_status": "verified",
+      "confidence_score": 0.84,
+      "source_ids": ["source-nusmods-bt3103"],
+      "created_at": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "skill_nodes": [
+    {
+      "id": "skill-product-metrics",
+      "user_id": "demo-nus-business-y3",
+      "skill": "Product metrics analysis",
+      "category": "product_analytics",
+      "confidence_score": 0.86,
+      "evidence_ids": ["evidence-fintech-internship", "evidence-bt2102"],
+      "claim_ids": ["claim-metrics-analysis", "claim-data-visualisation"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "skill-sql-workflows",
+      "user_id": "demo-nus-business-y3",
+      "skill": "SQL and analytics workflows",
+      "category": "technical",
+      "confidence_score": 0.8,
+      "evidence_ids": ["evidence-bt3103"],
+      "claim_ids": ["claim-analytics-systems"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "skill-stakeholder-storytelling",
+      "user_id": "demo-nus-business-y3",
+      "skill": "Stakeholder storytelling",
+      "category": "communication",
+      "confidence_score": 0.68,
+      "evidence_ids": ["evidence-fintech-internship"],
+      "claim_ids": ["claim-metrics-analysis"],
+      "created_at": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "gap_nodes": [
+    {
+      "id": "gap-product-metrics",
+      "user_id": "demo-nus-business-y3",
+      "target_role": "Grab Singapore Product Analyst",
+      "requirement": "Use product metrics to identify opportunities and make recommendations.",
+      "status": "matched",
+      "recommended_action": null,
+      "linked_evidence_ids": ["evidence-fintech-internship", "evidence-bt2102"],
+      "source_ids": ["source-grab-careers-product"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "gap-sql-data-workflows",
+      "user_id": "demo-nus-business-y3",
+      "target_role": "Grab Singapore Product Analyst",
+      "requirement": "Extract and analyse structured product data.",
+      "status": "matched",
+      "recommended_action": null,
+      "linked_evidence_ids": ["evidence-bt3103"],
+      "source_ids": ["source-grab-careers-product"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "gap-experimentation",
+      "user_id": "demo-nus-business-y3",
+      "target_role": "Grab Singapore Product Analyst",
+      "requirement": "Design and interpret product experiments.",
+      "status": "weak",
+      "recommended_action": "Publish a small A/B-test case study using onboarding funnel data.",
+      "linked_evidence_ids": ["evidence-fintech-internship"],
+      "source_ids": ["source-grab-careers-product"],
+      "created_at": "2026-05-27T00:00:00Z"
+    },
+    {
+      "id": "gap-marketplace-context",
+      "user_id": "demo-nus-business-y3",
+      "target_role": "Grab Singapore Product Analyst",
+      "requirement": "Explain marketplace and platform product loops.",
+      "status": "missing",
+      "recommended_action": "Create a Grab marketplace strategy teardown covering mobility, delivery, and fintech loops.",
+      "linked_evidence_ids": [],
+      "source_ids": ["source-grab-careers-product"],
+      "created_at": "2026-05-27T00:00:00Z"
+    }
+  ],
+  "trace_events": [
+    {
+      "id": "trace-demo-planner",
+      "user_id": "demo-nus-business-y3",
+      "run_id": "run-demo-grab-pa",
+      "stage": "planner",
+      "message": "Extracted target requirements for Grab Singapore Product Analyst.",
+      "created_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "requirements": 4
+      }
+    },
+    {
+      "id": "trace-demo-verifier",
+      "user_id": "demo-nus-business-y3",
+      "run_id": "run-demo-grab-pa",
+      "stage": "verifier",
+      "message": "Verified module and internship evidence into confidence-scored claims.",
+      "created_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "claims": 3
+      }
+    },
+    {
+      "id": "trace-demo-synthesiser",
+      "user_id": "demo-nus-business-y3",
+      "run_id": "run-demo-grab-pa",
+      "stage": "synthesiser",
+      "message": "Generated matched, weak, and missing gap nodes for the target JD.",
+      "created_at": "2026-05-27T00:00:00Z",
+      "metadata": {
+        "matched": 2,
+        "weak": 1,
+        "missing": 1
+      }
+    }
+  ]
+}

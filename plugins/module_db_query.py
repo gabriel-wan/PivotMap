@@ -1,4 +1,4 @@
-"""MiroFlow tool for querying PostgreSQL module records."""
+"""MiroFlow tool for retrieving module evidence nodes."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import asdict
 from difflib import SequenceMatcher
 from typing import Any
 
-from schemas.interfaces import Module
+from schemas.interfaces import EvidenceNode
 
 try:
     from miroflow import register
@@ -19,133 +19,87 @@ except ImportError:  # pragma: no cover - local scaffold fallback
 
 
 @register
-def module_db_query(
-    query: str,
-    database_url: str | None = None,
-) -> dict[str, Any]:
-    """Find the best institutional module pathway for a suggested skill.
-
-    The production path queries PostgreSQL with `pg_trgm` similarity first and a
-    pgvector semantic fallback second. If a database connection is unavailable,
-    deterministic scaffold rows keep tests and local demos working.
-    """
-    db_url = database_url or os.getenv("DATABASE_URL")
-    module = _query_postgres(query, db_url) if db_url else None
-    module = module or _query_demo_rows(query)
-    if module is None:
-        return {"module": None, "gap_note": "no institutional pathway found"}
-    return {"module": module, "gap_note": None}
+def module_db_query(query: str, database_url: str | None = None) -> dict[str, Any]:
+    """Find the best module evidence node for a suggested module name or code."""
+    node = _query_postgres(query, database_url or os.getenv("DATABASE_URL")) or _query_demo_rows(query)
+    if node is None:
+        return {"evidence_node": None, "gap_note": "no institutional pathway found"}
+    return {"evidence_node": asdict(node), "gap_note": None}
 
 
-def _query_postgres(query: str, database_url: str | None) -> Module | None:
-    """Query PostgreSQL with trigram similarity and pgvector fallback."""
+def _query_postgres(query: str, database_url: str | None) -> EvidenceNode | None:
+    """Query PostgreSQL evidence nodes with pg_trgm similarity."""
     if not database_url:
         return None
     try:
-        import psycopg
+        from sqlalchemy import create_engine, text
     except ImportError:
         return None
 
     try:
-        with psycopg.connect(database_url) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
+        engine = create_engine(database_url, pool_pre_ping=True)
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
                     """
-                    SELECT id, code, title, faculty, description, prereqs, semesters
-                    FROM modules
-                    WHERE similarity(code || ' ' || title, %s) >= 0.4
-                    ORDER BY similarity(code || ' ' || title, %s) DESC
+                    SELECT id, user_id, kind, title, description, source_ids, created_at, metadata
+                    FROM evidence_nodes
+                    WHERE kind = 'module'
+                      AND similarity(title || ' ' || description, :query) >= 0.4
+                    ORDER BY similarity(title || ' ' || description, :query) DESC
                     LIMIT 1
-                    """,
-                    (query, query),
-                )
-                row = cur.fetchone()
-                if row:
-                    return _module_from_row(row)
-
-                cur.execute(
                     """
-                    SELECT id, code, title, faculty, description, prereqs, semesters
-                    FROM modules
-                    WHERE embedding IS NOT NULL
-                    ORDER BY embedding <-> %s::vector
-                    LIMIT 1
-                    """,
-                    (_semantic_stub_vector(query),),
-                )
-                row = cur.fetchone()
-                if row:
-                    return _module_from_row(row)
+                ),
+                {"query": query},
+            ).mappings().first()
+        if row:
+            return EvidenceNode(
+                id=row["id"],
+                user_id=row["user_id"],
+                kind=row["kind"],
+                title=row["title"],
+                description=row["description"],
+                source_ids=list(row["source_ids"] or []),
+                created_at=row["created_at"],
+                metadata=dict(row["metadata"] or {}),
+            )
     except Exception:
         return None
     return None
 
 
-def _query_demo_rows(query: str) -> Module | None:
-    """Fuzzy-match against local scaffold rows when PostgreSQL is unavailable."""
+def _query_demo_rows(query: str) -> EvidenceNode | None:
+    """Fuzzy-match local module evidence when PostgreSQL is unavailable."""
     rows = _demo_rows()
-    ranked = sorted(
-        rows,
-        key=lambda module: _score(query, f"{module.code} {module.title} {module.description}"),
-        reverse=True,
-    )
+    ranked = sorted(rows, key=lambda row: _score(query, f"{row.title} {row.description}"), reverse=True)
     best = ranked[0] if ranked else None
-    if best and _score(query, f"{best.code} {best.title} {best.description}") >= 0.4:
+    if best and _score(query, f"{best.title} {best.description}") >= 0.4:
         return best
     return None
 
 
-def _demo_rows() -> list[Module]:
-    """Return representative module rows for local development."""
+def _demo_rows() -> list[EvidenceNode]:
+    """Return representative module evidence rows."""
     return [
-        Module(
-            id="nus-bt2102",
-            code="BT2102",
-            title="Data Management and Visualisation",
-            faculty="School of Computing",
+        EvidenceNode(
+            id="module-nus-bt2102",
+            user_id="system",
+            kind="module",
+            title="BT2102 Data Management and Visualisation",
             description="Data analysis, querying, dashboards, and visualisation.",
-            prereqs=[],
-            semesters=["1", "2"],
+            source_ids=["source-nusmods-bt2102"],
+            metadata={"institution": "NUS"},
         ),
-        Module(
-            id="nus-bt3103",
-            code="BT3103",
-            title="Application Systems Development for Business Analytics",
-            faculty="School of Computing",
+        EvidenceNode(
+            id="module-nus-bt3103",
+            user_id="system",
+            kind="module",
+            title="BT3103 Application Systems Development for Business Analytics",
             description="Business analytics applications and product data workflows.",
-            prereqs=["BT2102"],
-            semesters=["1"],
-        ),
-        Module(
-            id="nus-is1128",
-            code="IS1128",
-            title="Information Systems Leadership and Communication",
-            faculty="School of Computing",
-            description="Information systems, stakeholder communication, and teamwork.",
-            prereqs=[],
-            semesters=["1", "2"],
+            source_ids=["source-nusmods-bt3103"],
+            metadata={"institution": "NUS"},
         ),
     ]
-
-
-def _module_from_row(row: tuple[Any, ...]) -> Module:
-    """Convert a PostgreSQL row into a `Module` dataclass."""
-    return Module(
-        id=str(row[0]),
-        code=str(row[1]),
-        title=str(row[2]),
-        faculty=str(row[3]),
-        description=str(row[4]),
-        prereqs=list(row[5] or []),
-        semesters=list(row[6] or []),
-    )
-
-
-def _semantic_stub_vector(query: str) -> str:
-    """Return a deterministic vector literal placeholder for pgvector search."""
-    seed = sum(ord(char) for char in query) or 1
-    values = [((seed + index) % 100) / 100 for index in range(8)]
-    return "[" + ",".join(f"{value:.2f}" for value in values) + "]"
 
 
 def _score(query: str, candidate: str) -> float:
@@ -157,8 +111,3 @@ def _score(query: str, candidate: str) -> float:
     if normalized_query in normalized_candidate:
         return 1.0
     return SequenceMatcher(None, normalized_query, normalized_candidate).ratio()
-
-
-def module_to_json(module: Module) -> dict[str, Any]:
-    """Serialize a matched module for API responses or logs."""
-    return asdict(module)

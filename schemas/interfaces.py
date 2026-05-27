@@ -1,116 +1,102 @@
-"""Shared dataclass contracts for PivotMap proof graphs."""
+"""Application-facing contracts for the PivotMap Career Proof Graph."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Any, Literal
 
-ProofStatus = Literal["matched", "weak", "missing"]
-EvidenceStrength = Literal["strong", "weak"]
 SourceType = Literal[
     "job_post",
     "industry_report",
     "course_catalogue",
     "alumni_pattern",
+    "portfolio",
+    "resume",
+    "voice",
 ]
+EvidenceKind = Literal["module", "experience", "project", "resume", "voice"]
+ConfidenceStatus = Literal["verified", "supported", "user-attested", "weak", "missing"]
+GapStatus = Literal["matched", "weak", "missing"]
 
 
 @dataclass(frozen=True)
-class Module:
-    """Institution module record used by adapters and module validation."""
+class Source:
+    """A retrievable source used to support evidence, claims, skills, or gaps."""
 
     id: str
-    code: str
-    title: str
-    faculty: str
-    description: str
-    prereqs: list[str] = field(default_factory=list)
-    semesters: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ModuleDetail(Module):
-    """Detailed module metadata with syllabus and learning outcomes."""
-
-    syllabus_url: str | None = None
-    learning_outcomes: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class FacultyTree:
-    """Faculty structure returned by institution adapters."""
-
-    faculty_name: str
-    departments: list[str] = field(default_factory=list)
-    modules: list[Module] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class SourcedClaim:
-    """A claim with source provenance and temporal metadata."""
-
-    claim: str
     source_url: str
-    published_at: datetime
-    retrieved_at: datetime
-    confidence: float
-    source_type: SourceType | None = None
-    uncertainty_note: str | None = None
-
-
-@dataclass(frozen=True)
-class JDRequirement:
-    """A structured requirement extracted from a job description."""
-
-    skill: str
-    importance: float
-    category: str
-    confidence: float
-    sources: list[SourcedClaim] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class VerifiedSkillClaim:
-    """Verifier output keyed to a skill before proof mapping."""
-
-    skill: str
-    confidence: float
-    sources: list[SourcedClaim] = field(default_factory=list)
-    conflict_detected: bool = False
-    conflict_note: str | None = None
-
-
-@dataclass(frozen=True)
-class StudentEvidence:
-    """Evidence from a student's profile, transcript, or portfolio."""
-
-    type: str
+    source_type: SourceType
     title: str
-    skills_proven: list[str] = field(default_factory=list)
-    strength: EvidenceStrength = "weak"
+    published_at: datetime | None
+    retrieved_at: datetime
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
-class ProofNode:
-    """A requirement-to-evidence mapping in a proof graph."""
+class EvidenceNode:
+    """A stored piece of career evidence from modules, work, projects, or uploads."""
 
-    requirement: JDRequirement
-    status: ProofStatus
-    evidence: list[StudentEvidence] | None = None
-    gap_action: str | None = None
-    resume_bullet: str | None = None
-    sources: list[SourcedClaim] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ProofGraph:
-    """Complete living proof graph for one user and one job description."""
-
+    id: str
     user_id: str
-    jd_text: str
-    version: int
-    created_at: datetime
-    nodes: list[ProofNode] = field(default_factory=list)
-    edges: list[dict] = field(default_factory=list)
-    diff_from_prev: dict | None = None
+    kind: EvidenceKind
+    title: str
+    description: str
+    source_ids: list[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ClaimNode:
+    """A confidence-scored claim extracted from an evidence node."""
+
+    id: str
+    evidence_id: str
+    claim_text: str
+    confidence_status: ConfidenceStatus
+    confidence_score: float
+    source_ids: list[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class SkillNode:
+    """A skill inferred from claim and evidence nodes."""
+
+    id: str
+    user_id: str
+    skill: str
+    category: str
+    confidence_score: float
+    evidence_ids: list[str] = field(default_factory=list)
+    claim_ids: list[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class GapNode:
+    """A target-role requirement classified against the user's proof graph."""
+
+    id: str
+    user_id: str
+    target_role: str
+    requirement: str
+    status: GapStatus
+    recommended_action: str | None
+    linked_evidence_ids: list[str] = field(default_factory=list)
+    source_ids: list[str] = field(default_factory=list)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class TraceEvent:
+    """A visible agent or system event emitted during graph construction."""
+
+    id: str
+    user_id: str
+    run_id: str
+    stage: str
+    message: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)

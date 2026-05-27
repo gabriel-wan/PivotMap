@@ -1,26 +1,74 @@
-"""FastAPI backend for PivotMap analysis requests."""
+"""FastAPI entrypoint for the PivotMap Career Proof Graph API."""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
-from dataclasses import asdict, is_dataclass
-from datetime import date, datetime
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from schemas.interfaces import ProofGraph
+from backend.db import get_session
+from backend.miro_client import MODEL_NAME, MiroMindClient
+from backend.repository import graph_payload, load_graph_for_user, store_graph
 
-app = FastAPI(title="PivotMap API")
+logger = logging.getLogger("pivotmap.backend")
 
 
-class AnalyseRequest(BaseModel):
-    """Request payload for JD and student profile analysis."""
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Log safe runtime configuration for demo/live debugging."""
+    demo_mode = _demo_mode()
+    logger.info(
+        "pivotmap_startup DEMO_MODE=%s MIROMIND_API_KEY_present=%s model=%s mode=%s",
+        os.getenv("DEMO_MODE", "false"),
+        bool(os.getenv("MIROMIND_API_KEY")),
+        MODEL_NAME,
+        "fixture" if demo_mode else "live",
+    )
+    yield
 
+
+app = FastAPI(title="PivotMap Career Proof Graph API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class VoiceCaptureRequest(BaseModel):
+    """Request body for text-first voice capture."""
+
+    user_id: str = Field(..., min_length=1)
+    transcript: str = Field(..., min_length=1)
+
+
+class ResumeCaptureRequest(BaseModel):
+    """Request body for resume capture."""
+
+    user_id: str = Field(..., min_length=1)
+    resume_text: str = Field(..., min_length=1)
+
+
+class JDTargetRequest(BaseModel):
+    """Request body for JD targeting."""
+
+    user_id: str = Field(..., min_length=1)
     jd_text: str = Field(..., min_length=1)
+    company: str | None = None
     student_profile: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -30,56 +78,79 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/analyse")
-def analyse(payload: AnalyseRequest) -> dict[str, Any]:
-    """Analyse a JD and student profile into a serialized ProofGraph."""
-    if os.getenv("DEMO_MODE", "false").casefold() == "true":
-        return _load_demo_graph()
-
-    graph = _run_miroflow_agent(payload.jd_text, payload.student_profile)
-    return _serialize_graph(graph)
-
-
-def _run_miroflow_agent(jd_text: str, student_profile: dict[str, Any]) -> ProofGraph | dict[str, Any]:
-    """Invoke the MiroFlow graph, with a deterministic scaffold fallback."""
-    try:
-        from miroflow import run_agent_graph
-    except ImportError:
-        graph = _load_demo_graph()
-        graph["jd_text"] = jd_text
-        graph["user_id"] = str(student_profile.get("user_id", graph["user_id"]))
-        return graph
-
-    return run_agent_graph(
-        config_path="config/pivotmap_agent.yaml",
-        inputs={
-            "jd_text": jd_text,
-            "student_profile": student_profile,
-        },
+@app.post("/capture/voice")
+async def capture_voice(
+    payload: VoiceCaptureRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Capture a transcript into Career Proof Graph nodes."""
+    graph = _demo_graph(payload.user_id) if _demo_mode() else await MiroMindClient().generate_graph(
+        "capture_voice",
+        payload.model_dump(),
     )
+    return _persist_unless_demo(session, graph)
 
 
-def _load_demo_graph() -> dict[str, Any]:
-    """Load the pre-computed demo fixture."""
-    fixture_path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "mock_proof_graph.json"
-    return json.loads(fixture_path.read_text(encoding="utf-8"))
+@app.post("/capture/resume")
+async def capture_resume(
+    payload: ResumeCaptureRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Capture resume text into Career Proof Graph nodes."""
+    graph = _demo_graph(payload.user_id) if _demo_mode() else await MiroMindClient().generate_graph(
+        "capture_resume",
+        payload.model_dump(),
+    )
+    return _persist_unless_demo(session, graph)
 
 
-def _serialize_graph(graph: ProofGraph | dict[str, Any]) -> dict[str, Any]:
-    """Serialize a ProofGraph dataclass or graph-like dictionary to JSON data."""
-    if isinstance(graph, dict):
+@app.post("/target/jd")
+async def target_jd(
+    payload: JDTargetRequest,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Map a target job description against the user's proof graph."""
+    graph = _demo_graph(payload.user_id) if _demo_mode() else await MiroMindClient().generate_graph(
+        "target_jd",
+        payload.model_dump(),
+    )
+    return _persist_unless_demo(session, graph)
+
+
+@app.get("/graph/{user_id}")
+def get_graph(user_id: str, session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Return all Career Proof Graph nodes for a user."""
+    if _demo_mode():
+        return _demo_graph(user_id)
+    return load_graph_for_user(session, user_id)
+
+
+def _persist_unless_demo(session: Session, graph: dict[str, Any]) -> dict[str, Any]:
+    """Persist normal-mode graph output while keeping demo mode immediate."""
+    if _demo_mode():
         return graph
-    if is_dataclass(graph):
-        return _json_safe(asdict(graph))
-    raise TypeError(f"Expected ProofGraph or dict, got {type(graph)!r}")
+    store_graph(session, graph)
+    return graph
 
 
-def _json_safe(value: Any) -> Any:
-    """Convert dataclass output into JSON-safe primitives."""
-    if isinstance(value, dict):
-        return {key: _json_safe(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    return value
+def _demo_mode() -> bool:
+    """Return whether deterministic demo mode is enabled."""
+    return os.getenv("DEMO_MODE", "false").casefold() == "true"
+
+
+def _demo_graph(user_id: str = "demo-nus-business-y3") -> dict[str, Any]:
+    """Load the Career Proof Graph demo fixture."""
+    fixture_path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "demo_proof_graph.json"
+    if fixture_path.exists():
+        graph = json.loads(fixture_path.read_text(encoding="utf-8"))
+        return _with_user_id(graph, user_id)
+    return graph_payload(user_id=user_id)
+
+
+def _with_user_id(graph: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """Return demo graph data with a consistent requested user ID."""
+    graph["user_id"] = user_id
+    for collection in ["evidence_nodes", "skill_nodes", "gap_nodes", "trace_events"]:
+        for node in graph.get(collection, []):
+            node["user_id"] = user_id
+    return graph

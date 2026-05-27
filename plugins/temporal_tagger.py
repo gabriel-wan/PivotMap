@@ -1,13 +1,14 @@
-"""MiroFlow tool for turning raw pages into temporally weighted claims."""
+"""MiroFlow tool for extracting temporal source metadata."""
 
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 from html import unescape
 from typing import Any
+from uuid import uuid5, NAMESPACE_URL
 
-from schemas.interfaces import SourcedClaim, SourceType
+from schemas.interfaces import Source, SourceType
 
 try:
     from miroflow import register
@@ -23,42 +24,19 @@ def temporal_tagger(
     page_text: str,
     url: str,
     source_type: SourceType = "industry_report",
-    claim: str | None = None,
-    confidence: float = 0.8,
-) -> SourcedClaim:
-    """Extract page temporal metadata and return a sourced claim.
-
-    Args:
-        page_text: Raw fetched page text or HTML.
-        url: Source URL.
-        source_type: Source category used for temporal decay rules.
-        claim: Optional caller-supplied claim. When omitted, a concise claim is
-            derived from the page title or first sentence.
-        confidence: Initial confidence before temporal decay.
-
-    Returns:
-        A `SourcedClaim` with `published_at`, `retrieved_at`, confidence, and
-        optional uncertainty metadata.
-    """
-    retrieved_at = datetime.utcnow()
-    published_at = _extract_published_at(page_text) or retrieved_at
-    adjusted_confidence = confidence
-    uncertainty_note = None
-
-    age = retrieved_at - published_at
-    if source_type == "job_post" and age > timedelta(days=183):
-        adjusted_confidence *= 0.5
-    if source_type == "industry_report" and age > timedelta(days=548):
-        uncertainty_note = "source may be stale"
-
-    return SourcedClaim(
-        claim=claim or _derive_claim(page_text, url),
+    title: str | None = None,
+) -> Source:
+    """Extract temporal metadata from raw web text into a Source object."""
+    retrieved_at = datetime.now(UTC)
+    published_at = _extract_published_at(page_text)
+    return Source(
+        id=f"source-{uuid5(NAMESPACE_URL, url).hex[:12]}",
         source_url=url,
+        source_type=source_type,
+        title=title or _derive_title(page_text, url),
         published_at=published_at,
         retrieved_at=retrieved_at,
-        confidence=round(adjusted_confidence, 3),
-        source_type=source_type,
-        uncertainty_note=uncertainty_note,
+        metadata={"temporal_quality": _temporal_quality(source_type, published_at, retrieved_at)},
     )
 
 
@@ -81,26 +59,37 @@ def _extract_published_at(page_text: str) -> datetime | None:
 
 
 def _parse_datetime(value: str) -> datetime | None:
-    """Parse common ISO-like web timestamps into naive UTC datetimes."""
+    """Parse common ISO-like web timestamps."""
     cleaned = unescape(value.strip()).replace("Z", "+00:00")
     try:
         parsed = datetime.fromisoformat(cleaned)
     except ValueError:
         return None
     if parsed.tzinfo is not None:
-        return parsed.astimezone().replace(tzinfo=None)
-    return parsed
+        return parsed.astimezone(UTC)
+    return parsed.replace(tzinfo=UTC)
 
 
-def _derive_claim(page_text: str, url: str) -> str:
-    """Derive a short claim from page title or content."""
+def _derive_title(page_text: str, url: str) -> str:
+    """Derive a source title from HTML title or URL."""
     title_match = re.search(r"<title[^>]*>(.*?)</title>", page_text, re.IGNORECASE | re.DOTALL)
     if title_match:
         title = re.sub(r"\s+", " ", title_match.group(1)).strip()
         return unescape(title)
+    return url
 
-    cleaned = re.sub(r"<[^>]+>", " ", page_text)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    if cleaned:
-        return cleaned[:240]
-    return f"Source retrieved from {url}"
+
+def _temporal_quality(
+    source_type: SourceType,
+    published_at: datetime | None,
+    retrieved_at: datetime,
+) -> str:
+    """Describe freshness for downstream verifier agents."""
+    if published_at is None:
+        return "unknown"
+    age_days = (retrieved_at - published_at).days
+    if source_type == "job_post" and age_days > 183:
+        return "stale_job_post"
+    if source_type == "industry_report" and age_days > 548:
+        return "possibly_stale_report"
+    return "fresh"

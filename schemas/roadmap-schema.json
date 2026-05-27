@@ -1,193 +1,319 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://pivotmap.example/schemas/roadmap-schema.json",
-  "title": "PivotMap ProofGraph",
+  "$id": "https://pivotmap.example/schemas/career-proof-graph.json",
+  "title": "PivotMap Career Proof Graph",
   "type": "object",
-  "required": ["user_id", "jd_text", "version", "created_at", "nodes", "edges"],
+  "required": [
+    "user_id",
+    "sources",
+    "evidence_nodes",
+    "claim_nodes",
+    "skill_nodes",
+    "gap_nodes",
+    "trace_events"
+  ],
   "properties": {
     "user_id": {
       "type": "string"
     },
-    "jd_text": {
-      "type": "string"
-    },
-    "version": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "nodes": {
+    "sources": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/proofNode"
+        "$ref": "#/$defs/source"
       }
     },
-    "edges": {
+    "evidence_nodes": {
       "type": "array",
       "items": {
-        "type": "object"
+        "$ref": "#/$defs/evidenceNode"
       }
     },
-    "diff_from_prev": {
-      "type": ["object", "null"],
-      "properties": {
-        "changed": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "new": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "resolved": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "stale": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
+    "claim_nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/claimNode"
+      }
+    },
+    "skill_nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/skillNode"
+      }
+    },
+    "gap_nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gapNode"
+      }
+    },
+    "trace_events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/traceEvent"
       }
     }
   },
   "$defs": {
-    "sourcedClaim": {
+    "source": {
       "type": "object",
       "required": [
-        "claim",
+        "id",
         "source_url",
+        "source_type",
+        "title",
         "published_at",
         "retrieved_at",
-        "confidence"
+        "metadata"
       ],
       "properties": {
-        "claim": {
+        "id": {
           "type": "string"
         },
         "source_url": {
-          "type": "string",
-          "format": "uri"
+          "type": "string"
+        },
+        "source_type": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
         },
         "published_at": {
-          "type": "string",
+          "type": ["string", "null"],
           "format": "date-time"
         },
         "retrieved_at": {
           "type": "string",
           "format": "date-time"
         },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "source_type": {
-          "type": ["string", "null"],
-          "enum": [
-            "job_post",
-            "industry_report",
-            "course_catalogue",
-            "alumni_pattern",
-            null
-          ]
-        },
-        "uncertainty_note": {
-          "type": ["string", "null"]
+        "metadata": {
+          "type": "object"
         }
       },
       "additionalProperties": false
     },
-    "jdRequirement": {
+    "evidenceNode": {
       "type": "object",
-      "required": ["skill", "importance", "category", "confidence", "sources"],
+      "required": [
+        "id",
+        "user_id",
+        "kind",
+        "title",
+        "description",
+        "source_ids",
+        "created_at",
+        "metadata"
+      ],
       "properties": {
-        "skill": {
+        "id": {
           "type": "string"
         },
-        "importance": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "category": {
+        "user_id": {
           "type": "string"
         },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "sources": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/sourcedClaim"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "studentEvidence": {
-      "type": "object",
-      "required": ["type", "title", "skills_proven", "strength"],
-      "properties": {
-        "type": {
-          "type": "string"
+        "kind": {
+          "type": "string",
+          "enum": ["module", "experience", "project", "resume", "voice"]
         },
         "title": {
           "type": "string"
         },
-        "skills_proven": {
+        "description": {
+          "type": "string"
+        },
+        "source_ids": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "strength": {
+        "created_at": {
           "type": "string",
-          "enum": ["strong", "weak"]
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object"
         }
       },
       "additionalProperties": false
     },
-    "proofNode": {
+    "claimNode": {
       "type": "object",
-      "required": ["requirement", "status", "evidence", "gap_action", "resume_bullet", "sources"],
+      "required": [
+        "id",
+        "evidence_id",
+        "claim_text",
+        "confidence_status",
+        "confidence_score",
+        "source_ids",
+        "created_at"
+      ],
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "evidence_id": {
+          "type": "string"
+        },
+        "claim_text": {
+          "type": "string"
+        },
+        "confidence_status": {
+          "type": "string",
+          "enum": ["verified", "supported", "user-attested", "weak", "missing"]
+        },
+        "confidence_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "skillNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "user_id",
+        "skill",
+        "category",
+        "confidence_score",
+        "evidence_ids",
+        "claim_ids",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "confidence_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "gapNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "user_id",
+        "target_role",
+        "requirement",
+        "status",
+        "recommended_action",
+        "linked_evidence_ids",
+        "source_ids",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "target_role": {
+          "type": "string"
+        },
         "requirement": {
-          "$ref": "#/$defs/jdRequirement"
+          "type": "string"
         },
         "status": {
           "type": "string",
           "enum": ["matched", "weak", "missing"]
         },
-        "evidence": {
-          "type": ["array", "null"],
-          "items": {
-            "$ref": "#/$defs/studentEvidence"
-          }
-        },
-        "gap_action": {
+        "recommended_action": {
           "type": ["string", "null"]
         },
-        "resume_bullet": {
-          "type": ["string", "null"]
-        },
-        "sources": {
+        "linked_evidence_ids": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/sourcedClaim"
+            "type": "string"
           }
+        },
+        "source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "traceEvent": {
+      "type": "object",
+      "required": [
+        "id",
+        "user_id",
+        "run_id",
+        "stage",
+        "message",
+        "created_at",
+        "metadata"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metadata": {
+          "type": "object"
         }
       },
       "additionalProperties": false

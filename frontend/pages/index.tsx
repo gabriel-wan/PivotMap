@@ -5,61 +5,58 @@ import {
   type CSSProperties,
   type MutableRefObject,
   type ReactNode,
+  type RefObject,
 } from "react";
+import CareerGraphCanvas, { CareerProofGraph } from "../components/ProofGraphCanvas";
+import TimelineView from "../components/TimelineView";
+
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const isDemoFixtureMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 
 const commands = [
   "Modify my resume to fit this LinkedIn post",
   "Show me what skills I lack for this job, and the skill roadmap",
 ];
 
+const sampleTranscript =
+  "I analysed onboarding funnel metrics during a fintech internship and built dashboards for weekly product reviews.";
+
 const modules = [
-  ["BT2102", "Predictive Analytics"],
-  ["CS1010S", "Programming Methodology"],
-  ["DAO2702", "Data Management"],
-  ["EC2104", "Management Economics"],
+  ["BT2102", "Data Management and Visualisation"],
+  ["BT3103", "Application Systems Development for Business Analytics"],
+  ["IS1128", "Information Systems"],
+  ["FIN2704", "Finance"],
 ];
 
 const requirements = [
-  "Python",
-  "SQL",
-  "Data Visualization",
-  "Dashboards",
-  "Stakeholder Communication",
-  "Business Analysis",
-  "Problem Solving",
-  "Tableau (nice to have)",
-];
-
-const actions = [
-  ["Build a Tableau dashboard project", "High"],
-  ["Add communication project or experience", "Medium"],
-  ["Learn advanced SQL window functions", "Medium"],
-];
-
-const stats = [
-  ["Strong", "5", "bg-pivot-teal"],
-  ["Weak", "2", "bg-pivot-amber"],
-  ["Missing", "1", "bg-pivot-coral"],
+  "Product metrics",
+  "SQL analytics",
+  "Experimentation",
+  "User behaviour analysis",
+  "Stakeholder storytelling",
+  "Marketplace strategy",
+  "Dashboarding",
+  "Product intuition",
 ];
 
 const steps = [
   {
-    action: "Import modules",
-    body: "Start with modules, projects, internships, and certifications. PivotMap keeps the raw evidence visible before any matching happens.",
+    action: "Capture evidence",
+    body: "Review or edit the evidence PivotMap should use. The command box above is the fastest way in; this panel is for fine-tuning.",
     eyebrow: "Step 1",
-    title: "Import your academic journey",
+    title: "Review career evidence",
   },
   {
-    action: "Parse JD",
-    body: "The JD becomes requirement nodes: skills, categories, importance, and confidence. The target is explicit before matching proof.",
+    action: "Target JD",
+    body: "Tune the target role text before mapping your proof. Paste a JD here when you want more control than the command box.",
     eyebrow: "Step 2",
-    title: "Paste job description",
+    title: "Review target role",
   },
   {
-    action: "View proof map",
-    body: "Matched, weak, and missing evidence becomes a source-backed roadmap: what to prove now, what to build next, and what to learn before applying.",
+    action: "View live graph",
+    body: "Matched proof, needs-stronger-proof areas, and missing proof become a source-backed roadmap for what to show next.",
     eyebrow: "Step 3",
-    title: "Get your proof map",
+    title: "View proof map",
   },
 ];
 
@@ -74,12 +71,12 @@ const evidenceCards = [
   {
     className: "left-[5%] top-[24%] rotate-[-5deg]",
     label: "Module evidence",
-    title: "BT2102 Predictive Analytics",
+    title: "BT2102 Product Analytics",
   },
   {
     className: "right-[6%] top-[22%] rotate-[4deg]",
     label: "LinkedIn post",
-    title: "Data Analyst Intern",
+    title: "Grab Product Analyst",
   },
   {
     className: "left-[12%] bottom-[18%] rotate-[3deg]",
@@ -89,19 +86,41 @@ const evidenceCards = [
   {
     className: "right-[12%] bottom-[20%] rotate-[-4deg]",
     label: "Roadmap action",
-    title: "Build Tableau dashboard",
+    title: "Build experimentation case study",
   },
 ];
+
+const emptyGraph: CareerProofGraph = {
+  user_id: "demo-nus-business-y3",
+  sources: [],
+  evidence_nodes: [],
+  claim_nodes: [],
+  skill_nodes: [],
+  gap_nodes: [],
+  trace_events: [],
+};
 
 export default function Home() {
   const [activeStep, setActiveStep] = useState(0);
   const [isDark, setIsDark] = useState(false);
+  const [graph, setGraph] = useState<CareerProofGraph>(emptyGraph);
+  const [heroCommand, setHeroCommand] = useState(commands[0]);
+  const [jdText, setJdText] = useState(
+    "Grab Singapore Product Analyst role focused on product metrics, user behaviour analysis, experimentation, and stakeholder communication.",
+  );
+  const [transcript, setTranscript] = useState(sampleTranscript);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const prefersReducedMotion = usePrefersReducedMotion();
-  const typedCommand = useTypedCommands(commands, prefersReducedMotion);
+  const typedPlaceholder = useTypedCommands(commands, prefersReducedMotion);
   const heroRef = useRef<HTMLElement | null>(null);
+  const demoRef = useRef<HTMLElement | null>(null);
+  const graphRef = useRef<HTMLDivElement | null>(null);
+  const evidenceEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
   const active = steps[activeStep];
   const themeStyle = (isDark ? darkTheme : lightTheme) as CSSProperties;
+  const hasGraph = graph.evidence_nodes.length + graph.claim_nodes.length + graph.skill_nodes.length + graph.gap_nodes.length > 0;
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -129,6 +148,98 @@ export default function Home() {
     };
   }, [prefersReducedMotion]);
 
+  async function updateGraph(endpoint: "/capture/voice" | "/target/jd", body: Record<string, string | object | undefined>) {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${apiUrl}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw new Error(`PivotMap API returned ${response.status}`);
+      }
+
+      const nextGraph = (await response.json()) as CareerProofGraph;
+      setGraph(nextGraph);
+      setActiveStep(2);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to reach PivotMap API";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function runTargeting(nextJdText?: unknown) {
+    const safeJdText = typeof nextJdText === "string" ? nextJdText : jdText;
+    setJdText(safeJdText);
+    void updateGraph("/target/jd", {
+      user_id: graph.user_id,
+      jd_text: safeJdText,
+      company: "Grab Singapore",
+      student_profile: { year: 3, institution: "NUS Business" },
+    });
+  }
+
+  function captureVoice(nextTranscript?: unknown) {
+    const safeTranscript = typeof nextTranscript === "string" ? nextTranscript : transcript;
+    setTranscript(safeTranscript);
+    void updateGraph("/capture/voice", {
+      user_id: graph.user_id,
+      transcript: safeTranscript,
+    });
+  }
+
+  function submitHeroCommand() {
+    const command = heroCommand.trim();
+    if (!command || loading) return;
+
+    if (looksLikeJobDescription(command)) {
+      setActiveStep(1);
+      runTargeting(command);
+      return;
+    }
+
+    setActiveStep(0);
+    captureVoice(command);
+  }
+
+  function openEvidenceEditor() {
+    setActiveStep(0);
+    demoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => evidenceEditorRef.current?.focus(), 350);
+  }
+
+  function useSampleTranscript() {
+    setHeroCommand(sampleTranscript);
+    setTranscript(sampleTranscript);
+    setActiveStep(0);
+    demoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function viewGraph() {
+    setActiveStep(2);
+    graphRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function handleStepAction() {
+    if (activeStep === 0) {
+      captureVoice();
+      return;
+    }
+
+    if (activeStep === 1) {
+      runTargeting();
+      return;
+    }
+
+    viewGraph();
+  }
+
   return (
     <main className="min-h-screen bg-pivot-bg text-pivot-body transition-colors duration-300" style={themeStyle}>
       <nav className="sticky top-0 z-20 border-b border-pivot-border bg-pivot-paper/95">
@@ -137,7 +248,7 @@ export default function Home() {
             <span className="grid h-10 w-10 place-items-center rounded-[11px] bg-pivot-purple text-sm font-black tracking-[-0.04em] text-white">
               PM
             </span>
-            <span className="text-[26px] font-black leading-none tracking-[-0.055em] text-pivot-ink">
+            <span className="text-[26px] font-black leading-none text-pivot-ink">
               PivotMap
             </span>
           </a>
@@ -161,36 +272,71 @@ export default function Home() {
             >
               {isDark ? "Light" : "Dark"}
             </button>
-            <button className="hidden rounded-lg bg-pivot-purple px-4 py-2 text-sm font-semibold text-white transition hover:bg-pivot-purple-mid sm:block">
-              Map my fit
+            <button
+              className="hidden rounded-lg bg-pivot-purple px-4 py-2 text-sm font-semibold text-white transition hover:bg-pivot-purple-mid sm:block"
+              disabled={loading}
+              onClick={() => runTargeting()}
+              type="button"
+            >
+              {loading ? "Mapping..." : "Map my fit"}
             </button>
           </div>
         </div>
       </nav>
 
       <CommandHero
-        command={typedCommand}
+        command={heroCommand}
         heroRef={heroRef}
+        loading={loading}
+        onCommandChange={setHeroCommand}
+        onOpenEvidenceEditor={openEvidenceEditor}
+        onSubmit={submitHeroCommand}
+        onUseSampleTranscript={useSampleTranscript}
         prefersReducedMotion={prefersReducedMotion}
+        placeholder={typedPlaceholder}
         scrollProgress={scrollProgress}
       />
 
-      <section id="console" className="mx-auto max-w-7xl px-5 pb-16 pt-10 sm:px-8">
+      <section id="console" className="mx-auto max-w-7xl px-5 pb-16 pt-10 sm:px-8" ref={demoRef}>
         <div className="mb-8 max-w-3xl">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-pivot-purple">
-            Product demo
+            Review and refine
           </p>
           <h2 className="mt-3 font-serif text-5xl leading-none text-pivot-ink sm:text-6xl">
-            The proof map stays one click away.
+            Your command becomes a proof map.
           </h2>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-pivot-muted">
+            The hero is the primary input. Use these panels only when you want to edit the sample evidence or target role before mapping.
+          </p>
+          {isDemoFixtureMode ? (
+            <p className="mt-4 inline-flex rounded-full border border-pivot-border bg-pivot-paper px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-pivot-muted">
+              Demo fixture: responses use the fixed Grab/NUS example
+            </p>
+          ) : null}
         </div>
 
-        <div className="grid min-h-[640px] items-center gap-10 lg:grid-cols-[1.1fr_0.8fr]">
-          <div className="relative flex h-[560px] items-center rounded-[32px] border border-pivot-border bg-pivot-surface p-5 shadow-2xl shadow-pivot-purple/10 transition-colors duration-300">
+        <div
+          className={`grid items-start gap-10 ${
+            activeStep === 2 ? "lg:grid-cols-[minmax(0,1fr)_280px]" : "lg:grid-cols-[1.18fr_0.82fr]"
+          }`}
+        >
+          <div className="relative flex min-h-[560px] rounded-[32px] border border-pivot-border bg-pivot-surface p-4 shadow-2xl shadow-pivot-purple/10 transition-colors duration-300 sm:p-5 lg:h-[600px]">
             <div className="h-full w-full transition-all duration-300 ease-out" key={activeStep}>
-              {activeStep === 0 ? <ModulesVisual /> : null}
-              {activeStep === 1 ? <JobDescriptionVisual /> : null}
-              {activeStep === 2 ? <ProofMapVisual /> : null}
+              {activeStep === 0 ? (
+                <ModulesVisual
+                  editorRef={evidenceEditorRef}
+                  transcript={transcript}
+                  onTranscriptChange={setTranscript}
+                  onSubmit={() => captureVoice()}
+                  loading={loading}
+                />
+              ) : null}
+              {activeStep === 1 ? (
+                <JobDescriptionVisual jdText={jdText} onJdTextChange={setJdText} onSubmit={() => runTargeting()} loading={loading} />
+              ) : null}
+              {activeStep === 2 ? (
+                <LiveProofMapVisual graph={graph} graphRef={graphRef} hasGraph={hasGraph} loading={loading} />
+              ) : null}
             </div>
           </div>
 
@@ -204,9 +350,20 @@ export default function Home() {
             <p className="mt-5 max-w-md text-lg font-light leading-8 text-pivot-muted">
               {active.body}
             </p>
-            <button className="mt-7 rounded-xl bg-pivot-purple px-5 py-3 text-sm font-semibold text-white transition hover:bg-pivot-purple-mid">
-              {active.action}
+            <button
+              className="mt-7 rounded-xl bg-pivot-purple px-5 py-3 text-sm font-semibold text-white transition hover:bg-pivot-purple-mid disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={loading}
+              onClick={handleStepAction}
+              type="button"
+            >
+              {loading ? "Mapping..." : active.action}
             </button>
+
+            {error ? (
+              <p className="mt-4 rounded-xl border border-pivot-coral bg-pivot-coral-soft px-4 py-3 text-sm font-semibold text-pivot-coral">
+                {error}
+              </p>
+            ) : null}
 
             <div className="mt-12 space-y-5">
               {steps.map((step, index) => {
@@ -239,17 +396,17 @@ export default function Home() {
 
         <div id="sources" className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-semibold text-pivot-purple">
           <span>Powered by MiroFlow agents</span>
-          <span>Live research</span>
+          <span>Career evidence</span>
           <span>Verified sources</span>
-          <span>Proof graphs</span>
+          <span>Roadmap actions</span>
         </div>
       </section>
 
       <section id="workflow" className="mx-auto grid max-w-7xl gap-5 px-5 pb-20 sm:px-8 lg:grid-cols-3">
         {[
-          ["1", "Parse the job", "The JD becomes requirement nodes with skill, category, importance, confidence, and source metadata."],
-          ["2", "Map the evidence", "Modules, projects, internships, and claims are scored against each requirement as matched, weak, or missing."],
-          ["3", "Export the roadmap", "The synthesiser returns resume bullets, learning actions, portfolio tasks, and source-backed timelines."],
+          ["1", "Capture evidence", "Modules, internships, projects, and resume details become career evidence with source pointers."],
+          ["2", "Verify proof", "PivotMap scores how strongly each piece of evidence supports the target role."],
+          ["3", "Map the gaps", "Matched proof, needs-stronger-proof areas, and missing proof become concrete roadmap actions."],
         ].map(([number, title, body]) => (
           <article className="border-t border-pivot-border pt-5" key={title}>
             <p className="font-serif text-5xl italic text-pivot-purple">{number}</p>
@@ -259,7 +416,7 @@ export default function Home() {
         ))}
       </section>
 
-      <ResumeProofPreview />
+      <ResumeProofPreview graph={graph} hasGraph={hasGraph} />
     </main>
   );
 }
@@ -293,12 +450,24 @@ const darkTheme = {
 function CommandHero({
   command,
   heroRef,
+  loading,
+  onCommandChange,
+  onOpenEvidenceEditor,
+  onSubmit,
+  onUseSampleTranscript,
   prefersReducedMotion,
+  placeholder,
   scrollProgress,
 }: {
   command: string;
   heroRef: MutableRefObject<HTMLElement | null>;
+  loading: boolean;
+  onCommandChange: (value: string) => void;
+  onOpenEvidenceEditor: () => void;
+  onSubmit: () => void;
+  onUseSampleTranscript: () => void;
   prefersReducedMotion: boolean;
+  placeholder: string;
   scrollProgress: number;
 }) {
   return (
@@ -335,31 +504,57 @@ function CommandHero({
         </div>
 
         <div className="relative w-full max-w-4xl rounded-[28px] border border-pivot-border bg-pivot-paper p-3 shadow-2xl shadow-pivot-purple/10">
-          <div className="min-h-[220px] rounded-[22px] bg-pivot-surface p-6 text-left sm:p-8">
-            <p className="max-w-3xl text-3xl font-medium leading-tight text-pivot-ink sm:text-5xl">
-              {command}
-              <span className="typing-cursor ml-1 inline-block h-[1em] w-px translate-y-1 bg-pivot-ink" />
+          <div className="rounded-[22px] bg-pivot-surface p-5 text-left sm:p-7">
+            <label className="sr-only" htmlFor="hero-command">
+              Paste a job description, resume note, transcript, or career evidence
+            </label>
+            <textarea
+              className="block min-h-[96px] w-full resize-none border-0 bg-transparent p-0 text-2xl font-medium leading-snug text-pivot-ink outline-none placeholder:text-pivot-muted/55 sm:min-h-[118px] sm:text-4xl"
+              disabled={loading}
+              id="hero-command"
+              onChange={(event) => onCommandChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  onSubmit();
+                }
+              }}
+              placeholder={placeholder}
+              rows={3}
+              value={command}
+            />
+            <p className="mt-3 text-sm font-medium text-pivot-muted">
+              Paste a JD, transcript, resume note, or project story. Press Enter to map; Shift+Enter adds a new line.
             </p>
 
-            <div className="mt-14 flex items-end justify-between gap-4">
+            <div className="mt-7 flex items-center justify-between gap-4">
               <button
-                aria-label="Add source"
-                className="grid h-11 w-11 place-items-center rounded-full border border-pivot-border bg-pivot-paper text-2xl text-pivot-ink transition hover:bg-pivot-purple-soft"
+                aria-label="Open evidence editor"
+                className="grid h-11 w-11 place-items-center rounded-full border border-pivot-border bg-pivot-paper text-2xl text-pivot-ink transition hover:bg-pivot-purple-soft disabled:opacity-60"
+                disabled={loading}
+                onClick={onOpenEvidenceEditor}
+                title="Open evidence editor"
                 type="button"
               >
                 +
               </button>
               <div className="flex items-center gap-3">
                 <button
-                  aria-label="Voice input"
-                  className="grid h-11 w-11 place-items-center rounded-full border border-pivot-border bg-pivot-paper text-pivot-ink transition hover:bg-pivot-purple-soft"
+                  aria-label="Use sample transcript"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-pivot-border bg-pivot-paper text-pivot-ink transition hover:bg-pivot-purple-soft disabled:opacity-60"
+                  disabled={loading}
+                  onClick={onUseSampleTranscript}
+                  title="Use sample transcript"
                   type="button"
                 >
                   <MicIcon />
                 </button>
                 <button
                   aria-label="Run proof map"
-                  className="grid h-12 w-12 place-items-center rounded-full bg-pivot-ink text-pivot-bg transition hover:bg-pivot-purple"
+                  className="grid h-12 w-12 place-items-center rounded-full bg-pivot-ink text-pivot-bg transition hover:bg-pivot-purple disabled:opacity-60"
+                  disabled={loading}
+                  onClick={() => onSubmit()}
+                  title="Map my fit"
                   type="button"
                 >
                   <ArrowIcon />
@@ -377,56 +572,56 @@ function CommandHero({
   );
 }
 
-function ResumeProofPreview() {
+function ResumeProofPreview({ graph, hasGraph }: { graph: CareerProofGraph; hasGraph: boolean }) {
+  const matchedCount = graph.gap_nodes.filter((node) => node.status === "matched").length;
+  const weakCount = graph.gap_nodes.filter((node) => node.status === "weak").length;
+  const missingCount = graph.gap_nodes.filter((node) => node.status === "missing").length;
+  const bullets = graph.claim_nodes.slice(0, 3).map((claim) => claim.claim_text);
+  const fallbackBullets = [
+    "Built predictive analytics workflow using BT2102 coursework, translating raw datasets into explainable model outputs.",
+    "Applied SQL and Python to clean, join, and summarize business data for dashboard-ready analysis.",
+    "Mapped weak product evidence into a portfolio action with source-backed milestones.",
+  ];
+
   return (
     <section className="mx-auto max-w-7xl px-5 pb-24 pt-4 sm:px-8" id="resume-proof">
       <div className="grid gap-5 rounded-[32px] border border-pivot-border bg-pivot-paper p-5 shadow-2xl shadow-pivot-purple/5 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
         <div className="relative rounded-none border-2 border-black bg-white p-3 shadow-[10px_10px_0_#111]">
           <div className="rounded-none bg-black p-6 text-white">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/20 pb-5">
-            <div>
-              <p className="font-mono text-xs font-bold uppercase tracking-[0.22em] text-[#2ea6d1]">
-                Resume proof
-              </p>
-              <h2 className="mt-3 font-serif text-5xl leading-none text-white">
-                Data Analyst Intern
-              </h2>
-            </div>
-            <span className="rounded-none border border-white px-3 py-1.5 font-mono text-xs font-bold uppercase text-white">
-              verified
-            </span>
-          </div>
-
-          <div className="mt-6 space-y-3">
-            {[
-              "Built predictive analytics workflow using BT2102 coursework, translating raw datasets into explainable model outputs.",
-              "Applied SQL and Python to clean, join, and summarize business data for dashboard-ready analysis.",
-              "Mapped weak Tableau evidence into a portfolio action with source-backed milestones.",
-            ].map((bullet) => (
-              <div className="flex gap-3 rounded-none border border-white/20 bg-white p-4 text-black" key={bullet}>
-                <span className="mt-2 h-2.5 w-2.5 shrink-0 bg-[#2ea6d1]" />
-                <p className="leading-7">{bullet}</p>
+              <div>
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.22em] text-[#2ea6d1]">
+                  Resume proof
+                </p>
+                <h2 className="mt-3 font-serif text-5xl leading-none text-white">
+                  Product Analyst
+                </h2>
               </div>
-            ))}
-          </div>
+              <span className="rounded-none border border-white px-3 py-1.5 font-mono text-xs font-bold uppercase text-white">
+                {hasGraph ? "live graph" : "demo"}
+              </span>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {(bullets.length > 0 ? bullets : fallbackBullets).map((bullet) => (
+                <div className="flex gap-3 rounded-none border border-white/20 bg-white p-4 text-black" key={bullet}>
+                  <span className="mt-2 h-2.5 w-2.5 shrink-0 bg-[#2ea6d1]" />
+                  <p className="leading-7">{bullet}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         <div className="grid gap-4">
-          <ProofSummaryCard count="5" label="matched evidence" tone="teal" />
-          <ProofSummaryCard count="2" label="weak claims to build" tone="amber" />
-          <ProofSummaryCard count="1" label="missing proof gap" tone="coral" />
-          <div className="rounded-[24px] border border-pivot-border bg-pivot-bg p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-pivot-muted">
-              Source-backed labels
+          <ProofSummaryCard count={String(hasGraph ? matchedCount : 3)} label="matched evidence" tone="teal" />
+          <ProofSummaryCard count={String(hasGraph ? weakCount : 2)} label="weak claims to build" tone="amber" />
+          <ProofSummaryCard count={String(hasGraph ? missingCount : 1)} label="missing proof gap" tone="coral" />
+          <div className="max-h-80 overflow-auto rounded-[24px] border border-pivot-border bg-pivot-bg p-5">
+            <p className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-pivot-muted">
+              Living roadmap
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {["module evidence", "verified source", "roadmap action", "resume bullet"].map((label) => (
-                <span className="rounded-full border border-pivot-border bg-pivot-paper px-3 py-1.5 text-xs font-semibold text-pivot-body" key={label}>
-                  {label}
-                </span>
-              ))}
-            </div>
+            <TimelineView graph={graph} />
           </div>
         </div>
       </div>
@@ -434,105 +629,239 @@ function ResumeProofPreview() {
   );
 }
 
-function ModulesVisual() {
+function ModulesVisual({
+  editorRef,
+  loading,
+  onSubmit,
+  onTranscriptChange,
+  transcript,
+}: {
+  editorRef: RefObject<HTMLTextAreaElement>;
+  loading: boolean;
+  onSubmit: () => void;
+  onTranscriptChange: (value: string) => void;
+  transcript: string;
+}) {
   return (
-    <LightPanel title="NUSMods Planner" badge="Connected">
-      <div className="space-y-2">
-        {modules.map(([code, title]) => (
-          <div className="flex items-center justify-between rounded-xl bg-pivot-paper p-3" key={code}>
-            <div className="flex items-center gap-3">
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-pivot-purple text-[10px] font-bold text-white">
-                OK
-              </span>
-              <div>
-                <p className="text-sm font-bold text-pivot-ink">{code}</p>
-                <p className="mt-0.5 text-xs text-pivot-muted">{title}</p>
+    <LightPanel title="Career Evidence Editor" badge="Optional">
+      <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[0.78fr_1fr]">
+        <div className="min-h-0 space-y-2 overflow-auto pr-1">
+          {modules.map(([code, title]) => (
+            <div className="flex items-center justify-between rounded-xl bg-pivot-paper p-3" key={code}>
+              <div className="flex items-center gap-3">
+                <span className="grid h-7 w-7 place-items-center rounded-md bg-pivot-purple text-[10px] font-bold text-white">
+                  OK
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-pivot-ink">{code}</p>
+                  <p className="mt-0.5 text-xs text-pivot-muted">{title}</p>
+                </div>
               </div>
+              <span className="text-xs font-semibold text-pivot-muted">4 MC</span>
             </div>
-            <span className="text-xs font-semibold text-pivot-muted">4 MC</span>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <label className="text-sm font-bold text-pivot-ink" htmlFor="voice-transcript">
+            Evidence notes
+          </label>
+          <p className="mt-1 text-xs leading-5 text-pivot-muted">
+            Secondary editor for transcript, resume notes, module evidence, or internship details.
+          </p>
+          <textarea
+            className="mt-2 min-h-0 flex-1 resize-none rounded-2xl border border-pivot-border bg-pivot-paper p-4 text-sm leading-7 text-pivot-body outline-none transition focus:border-pivot-purple"
+            id="voice-transcript"
+            onChange={(event) => onTranscriptChange(event.target.value)}
+            ref={editorRef}
+            value={transcript}
+          />
+          <button
+            className="mt-4 rounded-xl bg-pivot-purple px-5 py-3 text-sm font-semibold text-white transition hover:bg-pivot-purple-mid disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={loading}
+            onClick={() => onSubmit()}
+            type="button"
+          >
+            {loading ? "Capturing..." : "Capture evidence"}
+          </button>
+        </div>
       </div>
-      <p className="mt-4 text-xs font-semibold text-pivot-muted">
-        + 2 more modules ready for verification
+    </LightPanel>
+  );
+}
+
+function JobDescriptionVisual({
+  jdText,
+  loading,
+  onJdTextChange,
+  onSubmit,
+}: {
+  jdText: string;
+  loading: boolean;
+  onJdTextChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <LightPanel title="Grab Product Analyst" icon="JD">
+      <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[0.78fr_1fr]">
+        <div className="min-h-0 overflow-hidden">
+          <p className="mb-4 text-sm font-bold text-pivot-ink">Key Requirements</p>
+          <div className="grid max-h-[420px] gap-2 overflow-auto pr-1">
+            {requirements.map((requirement) => (
+              <span className="rounded-xl bg-pivot-purple-soft px-3 py-2.5 text-sm font-semibold text-pivot-body" key={requirement}>
+                {requirement}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <label className="text-sm font-bold text-pivot-ink" htmlFor="target-jd">
+            Target role text
+          </label>
+          <p className="mt-1 text-xs leading-5 text-pivot-muted">
+            Secondary editor for the role or JD you want to map against.
+          </p>
+          <textarea
+            className="mt-2 min-h-0 flex-1 resize-none rounded-2xl border border-pivot-border bg-pivot-paper p-4 text-sm leading-7 text-pivot-body outline-none transition focus:border-pivot-purple"
+            id="target-jd"
+            onChange={(event) => onJdTextChange(event.target.value)}
+            value={jdText}
+          />
+          <button
+            className="mt-4 rounded-xl bg-pivot-purple px-5 py-3 text-sm font-semibold text-white transition hover:bg-pivot-purple-mid disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={loading}
+            onClick={() => onSubmit()}
+            type="button"
+          >
+            {loading ? "Mapping..." : "Map target JD"}
+          </button>
+        </div>
+      </div>
+    </LightPanel>
+  );
+}
+
+function LiveProofMapVisual({
+  graph,
+  graphRef,
+  hasGraph,
+  loading,
+}: {
+  graph: CareerProofGraph;
+  graphRef: MutableRefObject<HTMLDivElement | null>;
+  hasGraph: boolean;
+  loading: boolean;
+}) {
+  return (
+    <LightPanel title="Career Proof Graph" badge={hasGraph ? "Live" : "Ready"}>
+      <div className="flex h-full min-h-0 flex-col gap-3" ref={graphRef}>
+        <div className="h-[360px] min-h-[320px] flex-none overflow-hidden rounded-2xl border border-pivot-border bg-pivot-paper lg:min-h-0 lg:flex-1">
+          {hasGraph || loading ? (
+            <CareerGraphCanvas graph={graph} />
+          ) : (
+            <ProofMapPlaceholder />
+          )}
+        </div>
+        <div className="grid shrink-0 gap-3 xl:grid-cols-[1.1fr_1fr]">
+          <div className="grid gap-3 sm:grid-cols-[1.15fr_1fr]">
+            <ProofLegend />
+            <div className="grid grid-cols-2 gap-2">
+              <GraphStat label="evidence" value={graph.evidence_nodes.length} tone="teal" />
+              <GraphStat label="claims" value={graph.claim_nodes.length} tone="teal" />
+              <GraphStat label="skills" value={graph.skill_nodes.length} tone="amber" />
+              <GraphStat label="gaps" value={graph.gap_nodes.length} tone="coral" />
+            </div>
+          </div>
+          <div className="max-h-32 overflow-auto rounded-2xl border border-pivot-border bg-pivot-bg p-4">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-pivot-muted">
+              Trace
+            </p>
+            {graph.trace_events.length > 0 ? (
+              <div className="space-y-2">
+                {graph.trace_events.map((event) => (
+                  <p className="text-xs leading-5 text-pivot-body" key={event.id}>
+                    <strong className="text-pivot-ink">{event.stage}</strong>: {event.message}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs leading-5 text-pivot-muted">
+                Run the command to see how PivotMap turns evidence into proof and roadmap actions.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </LightPanel>
+  );
+}
+
+function ProofMapPlaceholder() {
+  return (
+    <div className="grid h-full min-h-[320px] place-items-center p-8 text-center">
+      <div>
+        <div className="mx-auto grid h-28 w-28 place-items-center rounded-full border-[12px] border-pivot-purple bg-pivot-paper">
+          <span className="font-serif text-4xl italic text-pivot-purple">PM</span>
+        </div>
+        <h4 className="mt-8 text-2xl font-semibold text-pivot-ink">
+          Your live graph will render here.
+        </h4>
+        <p className="mx-auto mt-3 max-w-sm leading-7 text-pivot-muted">
+          Capture evidence or target a role to load matched proof, weak proof, and missing proof from the backend.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ProofLegend() {
+  return (
+    <div className="rounded-2xl border border-pivot-border bg-pivot-bg p-3">
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-pivot-muted">
+        Proof status
       </p>
-    </LightPanel>
+      <div className="space-y-1.5 text-[11px] font-semibold text-pivot-body">
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-pivot-teal" />
+          matched proof
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-pivot-amber" />
+          needs stronger proof
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-pivot-coral" />
+          missing proof
+        </span>
+      </div>
+    </div>
   );
 }
 
-function JobDescriptionVisual() {
+function GraphStat({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "teal" | "amber" | "coral";
+  value: number;
+}) {
+  const toneClass =
+    tone === "teal"
+      ? "bg-pivot-teal text-white"
+      : tone === "amber"
+        ? "bg-pivot-amber text-white"
+        : "bg-pivot-coral text-white";
+
   return (
-    <LightPanel title="Data Analyst Intern" icon="JD">
-      <p className="mb-4 text-sm font-bold text-pivot-ink">Key Requirements</p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {requirements.map((requirement) => (
-          <span className="rounded-xl bg-pivot-purple-soft px-4 py-3 text-sm font-semibold text-pivot-body" key={requirement}>
-            {requirement}
-          </span>
-        ))}
-      </div>
-      <div className="mt-5 rounded-2xl border border-pivot-border bg-pivot-paper p-4">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-pivot-muted">
-          JD requirement node
-        </p>
-        <p className="mt-2 text-sm text-pivot-body">
-          skill, importance, category, confidence, source pointers
-        </p>
-      </div>
-    </LightPanel>
-  );
-}
-
-function ProofMapVisual() {
-  return (
-    <LightPanel title="Your Proof Map">
-      <div className="grid gap-6 md:grid-cols-[0.8fr_1fr]">
-        <div className="flex items-center gap-5">
-          <div className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full border-[12px] border-pivot-purple bg-pivot-paper">
-            <span className="font-serif text-4xl italic text-pivot-purple">78%</span>
-            <span className="absolute -bottom-6 text-[10px] font-bold uppercase tracking-[0.1em] text-pivot-muted">
-              overall fit
-            </span>
-          </div>
-          <div className="flex-1 space-y-3">
-            {stats.map(([label, value, color]) => (
-              <div className="flex items-center justify-between gap-3 text-sm" key={label}>
-                <span className="flex items-center gap-2 font-semibold text-pivot-body">
-                  <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
-                  {label}
-                </span>
-                <span className="font-bold text-pivot-ink">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-3 text-sm font-bold text-pivot-ink">Next Best Actions</p>
-          <div className="space-y-2">
-            {actions.map(([title, impact]) => (
-              <div className="rounded-xl border border-pivot-border bg-pivot-paper p-3" key={title}>
-                <p className="text-sm font-bold text-pivot-ink">{title}</p>
-                <span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${
-                  impact === "High"
-                    ? "bg-pivot-teal-soft text-pivot-teal"
-                    : "bg-pivot-amber-soft text-pivot-amber"
-                }`}>
-                  {impact} impact
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-7 grid gap-3 border-t border-pivot-border pt-5 sm:grid-cols-2">
-        <MiniBar label="Python" tone="teal" width="w-4/5" />
-        <MiniBar label="Data Analysis" tone="teal" width="w-3/4" />
-        <MiniBar label="Tableau" tone="coral" width="w-1/4" />
-        <MiniBar label="Stakeholder Communication" tone="coral" width="w-1/5" />
-      </div>
-    </LightPanel>
+    <div className="flex items-center justify-between rounded-2xl border border-pivot-border bg-pivot-bg px-3 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-pivot-muted">
+        {label}
+      </p>
+      <span className={`grid h-7 min-w-7 place-items-center rounded-full px-2 text-xs font-black ${toneClass}`}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -690,8 +1019,8 @@ function LightPanel({
   title: string;
 }) {
   return (
-    <section className="h-full min-h-[500px] rounded-2xl border border-pivot-border bg-pivot-paper/90 p-5 shadow-xl shadow-pivot-purple/5 backdrop-blur transition-colors duration-300">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-pivot-border bg-pivot-paper/90 p-4 shadow-xl shadow-pivot-purple/5 backdrop-blur transition-colors duration-300 sm:p-5">
+      <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
         <p className="flex items-center gap-2 text-sm font-bold text-pivot-ink">
           {icon ? (
             <span className="grid h-7 w-7 place-items-center rounded-md bg-pivot-purple text-[10px] text-white">
@@ -706,29 +1035,8 @@ function LightPanel({
           </span>
         ) : null}
       </div>
-      {children}
+      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
     </section>
-  );
-}
-
-function MiniBar({
-  label,
-  tone,
-  width,
-}: {
-  label: string;
-  tone: "teal" | "coral";
-  width: string;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-pivot-body">
-        <span>{label}</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-pivot-purple-soft">
-        <div className={`h-full rounded-full ${width} ${tone === "teal" ? "bg-pivot-teal" : "bg-pivot-coral"}`} />
-      </div>
-    </div>
   );
 }
 
@@ -747,6 +1055,27 @@ function ArrowIcon() {
       <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
     </svg>
   );
+}
+
+function looksLikeJobDescription(value: string) {
+  const text = value.toLowerCase();
+  const jdSignals = [
+    "job description",
+    "responsibilities",
+    "requirements",
+    "qualifications",
+    "product analyst",
+    "data analyst",
+    "intern",
+    "role",
+    "hiring",
+    "linkedin post",
+    "company",
+    "candidate",
+    "stakeholder",
+  ];
+
+  return jdSignals.some((signal) => text.includes(signal));
 }
 
 function usePrefersReducedMotion() {

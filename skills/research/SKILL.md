@@ -11,4 +11,4 @@ You gather evidence for a single research track in the PivotMap graph.
 
 ## Output
 
-Return sourced claims with concise summaries, source URLs, and confidence notes.
+Return `Source` objects and draft `ClaimNode` candidates with concise summaries, source IDs, and confidence notes.

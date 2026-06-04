@@ -29,9 +29,16 @@ alembic revision --autogenerate -m "describe change"   # autogen reads backend.m
 # Seed module evidence (dry-run prints; --write persists)
 PYTHONPATH=. python scripts/seed_modules.py          # dry run
 PYTHONPATH=. python scripts/seed_modules.py --write
+
+# Agent-graph skeleton (uv) — smoke-test the MiroFlow graph with a dummy task
+uv sync                          # core deps + .venv (fast)
+uv sync --extra miroflow         # also pull MiroFlow (run-agent) from git (heavy)
+uv run main.py trace             # validates pivotmap_agent.yaml + every SKILL.md, exits 0
 ```
 
 `PYTHONPATH=.` (or `PYTHONPATH=/app` in Docker) is required everywhere — modules import as top-level packages (`backend`, `adapters`, `schemas`, `plugins`), not via an installed package.
+
+Two toolchains coexist: **pip + `requirements.txt`** drives Docker and CI; **uv + `pyproject.toml`/`uv.lock`** drives the agent-graph layer (`main.py trace`) and pulls MiroFlow via the optional `miroflow` extra. `pyproject.toml` mirrors `requirements.txt`, so a `uv` env can run the whole app too. `pyproject` marks the project `package = false` (it's a flat app, not an installable wheel).
 
 CI (`.github/workflows/ci.yml`) only runs pytest, on PRs targeting `dev` and `main`. There is no Python linter configured. Branch from `dev` for feature work (see CONTRIBUTING.md).
 
@@ -68,7 +75,7 @@ jd_parser → planner → research ×4 (parallel) → verifier → module_valida
 
 Each node maps to a prompt in `skills/<node>/SKILL.md`. Key designed behaviors: planner spawns 4 parallel research tracks and retries (max 2) any track returning < 3 sourced claims; verifier scores confidence by source count (≥2 confirmed, ==1 low-confidence, contradiction → conflict node); proof_mapper classifies into matched/weak/missing; synthesiser emits the `roadmap-schema.json` payload.
 
-**Important:** the shipping backend does *not* yet run this multi-node graph — `MiroMindClient` makes a single chat-completion call asking for the full graph JSON. The YAML graph + `skills/` prompts are the target architecture being built toward. Two MiroFlow tools already exist as the building blocks: [plugins/module_db_query.py](plugins/module_db_query.py) (pg_trgm similarity over module evidence, with a fuzzy in-memory fallback) and [plugins/temporal_tagger.py](plugins/temporal_tagger.py) (extracts `published_at` from HTML/JSON-LD and tags source freshness). Both use a `register` decorator that no-ops when MiroFlow isn't installed.
+**Important:** the shipping backend does *not* yet run this multi-node graph — `MiroMindClient` makes a single chat-completion call asking for the full graph JSON. The YAML graph + `skills/` prompts are the target architecture being built toward. The root [main.py](main.py) `trace` command (uv) is the current skeleton: it loads this YAML, validates every referenced SKILL.md is present/parseable, and walks the nodes with a dummy task — but does not yet execute the nodes through MiroFlow. Two MiroFlow tools already exist as the building blocks: [plugins/module_db_query.py](plugins/module_db_query.py) (pg_trgm similarity over module evidence, with a fuzzy in-memory fallback) and [plugins/temporal_tagger.py](plugins/temporal_tagger.py) (extracts `published_at` from HTML/JSON-LD and tags source freshness). Both use a `register` decorator that no-ops when MiroFlow isn't installed.
 
 ## Institution adapters
 

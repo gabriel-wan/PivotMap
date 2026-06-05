@@ -110,10 +110,14 @@ async def target_jd(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """Map a target job description against the user's proof graph."""
-    graph = _demo_graph(payload.user_id) if _demo_mode() else await MiroMindClient().generate_graph(
-        "target_jd",
-        payload.model_dump(),
-    )
+    if _demo_mode():
+        graph = _demo_graph(payload.user_id)
+    else:
+        existing_graph = load_graph_for_user(session, payload.user_id)
+        model_payload = payload.model_dump()
+        model_payload["existing_graph"] = _targeting_context(existing_graph)
+        generated_graph = await MiroMindClient().generate_graph("target_jd", model_payload)
+        graph = _targeting_response(payload.user_id, existing_graph, generated_graph)
     return _persist_unless_demo(session, graph)
 
 
@@ -154,3 +158,66 @@ def _with_user_id(graph: dict[str, Any], user_id: str) -> dict[str, Any]:
         for node in graph.get(collection, []):
             node["user_id"] = user_id
     return graph
+
+
+def _targeting_context(existing_graph: dict[str, Any]) -> dict[str, Any]:
+    """Return stored proof nodes relevant to a fresh JD mapping run."""
+    return graph_payload(
+        user_id=str(existing_graph["user_id"]),
+        sources=existing_graph.get("sources", []),
+        evidence_nodes=existing_graph.get("evidence_nodes", []),
+        claim_nodes=existing_graph.get("claim_nodes", []),
+        skill_nodes=existing_graph.get("skill_nodes", []),
+        gap_nodes=[],
+        trace_events=[],
+    )
+
+
+def _targeting_response(
+    user_id: str,
+    existing_graph: dict[str, Any],
+    generated_graph: dict[str, Any],
+) -> dict[str, Any]:
+    """Combine stored proof context with only the new JD run outputs."""
+    return graph_payload(
+        user_id=user_id,
+        sources=_dedupe_by_id(
+            [
+                *existing_graph.get("sources", []),
+                *generated_graph.get("sources", []),
+            ]
+        ),
+        evidence_nodes=_dedupe_by_id(
+            [
+                *existing_graph.get("evidence_nodes", []),
+                *generated_graph.get("evidence_nodes", []),
+            ]
+        ),
+        claim_nodes=_dedupe_by_id(
+            [
+                *existing_graph.get("claim_nodes", []),
+                *generated_graph.get("claim_nodes", []),
+            ]
+        ),
+        skill_nodes=_dedupe_by_id(
+            [
+                *existing_graph.get("skill_nodes", []),
+                *generated_graph.get("skill_nodes", []),
+            ]
+        ),
+        gap_nodes=generated_graph.get("gap_nodes", []),
+        trace_events=generated_graph.get("trace_events", []),
+    )
+
+
+def _dedupe_by_id(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deduplicate graph nodes by ID while preserving first-seen order."""
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for node in nodes:
+        node_id = str(node.get("id", ""))
+        if not node_id or node_id in seen:
+            continue
+        seen.add(node_id)
+        deduped.append(node)
+    return deduped

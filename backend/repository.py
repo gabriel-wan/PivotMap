@@ -22,18 +22,15 @@ GraphPayload = dict[str, list[dict[str, Any]] | str]
 
 def store_graph(session: Session, graph: dict[str, Any]) -> None:
     """Upsert all graph entities in a Career Proof Graph payload."""
+    source_id_map: dict[str, str] = {}
+
     for source in graph.get("sources", []):
-        session.merge(
-            SourceModel(
-                id=source["id"],
-                source_url=source["source_url"],
-                source_type=source["source_type"],
-                title=source["title"],
-                published_at=_parse_datetime(source.get("published_at")),
-                retrieved_at=_parse_datetime(source["retrieved_at"]),
-                extra=source.get("metadata", {}),
-            )
-        )
+        incoming_id = source["id"]
+        source_model = _upsert_source_by_url(session, source)
+        source_id_map[incoming_id] = source_model.id
+
+    def remap_source_ids(source_ids: list[str] | None) -> list[str]:
+        return [source_id_map.get(source_id, source_id) for source_id in source_ids or []]
 
     for evidence in graph.get("evidence_nodes", []):
         session.merge(
@@ -43,7 +40,7 @@ def store_graph(session: Session, graph: dict[str, Any]) -> None:
                 kind=evidence["kind"],
                 title=evidence["title"],
                 description=evidence["description"],
-                source_ids=evidence.get("source_ids", []),
+                source_ids=remap_source_ids(evidence.get("source_ids")),
                 created_at=_parse_datetime(evidence["created_at"]),
                 extra=evidence.get("metadata", {}),
             )
@@ -57,7 +54,7 @@ def store_graph(session: Session, graph: dict[str, Any]) -> None:
                 claim_text=claim["claim_text"],
                 confidence_status=claim["confidence_status"],
                 confidence_score=claim["confidence_score"],
-                source_ids=claim.get("source_ids", []),
+                source_ids=remap_source_ids(claim.get("source_ids")),
                 created_at=_parse_datetime(claim["created_at"]),
             )
         )
@@ -86,7 +83,7 @@ def store_graph(session: Session, graph: dict[str, Any]) -> None:
                 status=gap["status"],
                 recommended_action=gap.get("recommended_action"),
                 linked_evidence_ids=gap.get("linked_evidence_ids", []),
-                source_ids=gap.get("source_ids", []),
+                source_ids=remap_source_ids(gap.get("source_ids")),
                 created_at=_parse_datetime(gap["created_at"]),
             )
         )
@@ -104,7 +101,42 @@ def store_graph(session: Session, graph: dict[str, Any]) -> None:
             )
         )
 
+    _remap_graph_source_ids(graph, source_id_map)
+
     session.commit()
+
+
+def _upsert_source_by_url(session: Session, source: dict[str, Any]) -> SourceModel:
+    """Upsert a source by unique URL and return the persistent row."""
+    source_model = session.scalar(
+        select(SourceModel).where(SourceModel.source_url == source["source_url"])
+    )
+    if source_model is None:
+        source_model = SourceModel(id=source["id"], source_url=source["source_url"])
+
+    source_model.source_type = source["source_type"]
+    source_model.title = source["title"]
+    source_model.published_at = _parse_datetime(source.get("published_at"))
+    source_model.retrieved_at = _parse_datetime(source["retrieved_at"])
+    source_model.extra = source.get("metadata", {})
+    session.add(source_model)
+    return source_model
+
+
+def _remap_graph_source_ids(graph: dict[str, Any], source_id_map: dict[str, str]) -> None:
+    """Keep the returned graph payload consistent with persisted source IDs."""
+    if not source_id_map:
+        return
+
+    for source in graph.get("sources", []):
+        source["id"] = source_id_map.get(source["id"], source["id"])
+
+    for collection in ["evidence_nodes", "claim_nodes", "gap_nodes"]:
+        for node in graph.get(collection, []):
+            node["source_ids"] = [
+                source_id_map.get(source_id, source_id)
+                for source_id in node.get("source_ids", [])
+            ]
 
 
 def load_graph_for_user(session: Session, user_id: str) -> dict[str, Any]:
